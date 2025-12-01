@@ -196,6 +196,7 @@ def create_model(
     name: str,
     num_classes: int = 100,
     pretrained: bool = False,
+    drop_rate: float = 0.0
 ) -> Tuple[nn.Module, int]:
     """
     Returns (model, img_size).
@@ -213,7 +214,12 @@ def create_model(
         img_size = 224
 
     elif name == "wrn28x10":
-        model = WideResNet(depth=28, widen_factor=10, num_classes=num_classes)
+        model = WideResNet(
+            depth=28,
+            widen_factor=10,
+            num_classes=num_classes,
+            drop_rate=drop_rate,
+        )
         img_size = 32
 
     elif name == "convnext_tiny":
@@ -571,6 +577,8 @@ def run_experiment_for_model(model_name: str, base_args):
     logger.info(f"Outputs will be saved under: {out_dir}")
     logger.info(f"Optimizer={opt_name}, lr={lr}, weight_decay={wd}")
     logger.info(f"Label smoothing={args.label_smoothing}, epochs={args.epochs}")
+    if model_name.lower() == "wrn28x10":
+        logger.info(f"Dropout rate (WideResNet blocks)={args.drop_rate}")
     logger.info(
         f"Dataset sizes: train={len(dl_train.dataset)}, "
         f"val={len(dl_val.dataset)}, test={len(dl_test.dataset)}"
@@ -772,6 +780,12 @@ def main():
         "--pretrained",
         action="store_true",
         help="Use pretrained weights when available (timm/torchvision)",
+    )
+    parser.add_argument(
+        "--drop-rate",
+        type=float,
+        default=0.0,
+        help="Dropout rate for WideResNet blocks",
     )
     parser.add_argument("--label-smoothing", type=float, default=0.1)
     parser.add_argument("--val-split", type=float, default=0.1)
