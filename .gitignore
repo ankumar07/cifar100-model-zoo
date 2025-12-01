@@ -1,0 +1,15 @@
+# Ignore data and outputs everywhere
+data/
+outputs/
+
+# Checkpoints / big model files
+*.pt
+*.pth
+*.ckpt
+
+# IDE & venv junk
+.idea/
+.venv/
+venv/
+env/
+__pycache__/
