@@ -262,11 +262,20 @@ def get_transforms(img_size: int):
         [
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
+            # stronger aug: RandAugment
+            transforms.RandAugment(num_ops=2, magnitude=9),
             transforms.Resize(img_size),
             transforms.ToTensor(),
             transforms.Normalize(
                 mean=(0.5071, 0.4867, 0.4408),
                 std=(0.2675, 0.2565, 0.2761),
+            ),
+            # Cutout-ish: RandomErasing operates on the tensor
+            transforms.RandomErasing(
+                p=0.5,
+                scale=(0.02, 0.2),  # rough "cutout" size range
+                ratio=(0.3, 3.3),
+                inplace=False,
             ),
         ]
     )
