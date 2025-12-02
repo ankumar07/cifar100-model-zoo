@@ -471,6 +471,7 @@ def run_experiment_for_model(model_name: str, base_args):
         model_name,
         num_classes=100,
         pretrained=args.pretrained,
+        drop_rate=args.drop_rate
     )
     model = model.to(device)
 
