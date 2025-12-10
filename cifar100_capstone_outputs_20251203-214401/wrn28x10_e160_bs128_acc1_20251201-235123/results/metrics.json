@@ -1,0 +1,38 @@
+{
+  "model": "wrn28x10",
+  "epochs_run": 160,
+  "optimizer": "sgd",
+  "lr_final": 0.0,
+  "weight_decay": 0.0005,
+  "batch_size": 128,
+  "accum_steps": 1,
+  "max_grad_norm": null,
+  "label_smoothing": 0.0,
+  "mixup_cutmix": {
+    "enabled": true,
+    "prob": 0.5,
+    "mixup_alpha": 0.2,
+    "cutmix_alpha": 1.0,
+    "switch_prob": 0.5
+  },
+  "ema": {
+    "enabled": true,
+    "decay": 0.9999,
+    "eval": false
+  },
+  "val": {
+    "loss": 0.761966065955162,
+    "top1": 0.798,
+    "top5": 0.9506
+  },
+  "test": {
+    "loss": 0.6417224734306336,
+    "top1": 0.8271,
+    "top5": 0.9636
+  },
+  "ece_raw": 0.0201254317894578,
+  "ece_temp_scaled": 0.0291562568038702,
+  "temperature": 0.9658310413360596,
+  "checkpoint": "./outputs\\wrn28x10_e160_bs128_acc1_20251201-235123\\checkpoints\\wrn28x10_best.pt",
+  "run_dir": "./outputs\\wrn28x10_e160_bs128_acc1_20251201-235123"
+}
