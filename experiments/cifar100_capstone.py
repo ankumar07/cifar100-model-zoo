@@ -49,6 +49,7 @@ VALID_MODELS = [
     "deit_tiny",
 ]
 
+
 # ---------------------------
 # WideResNet (28x10) for CIFAR-style data (works with any input size via AdaptiveAvgPool)
 # ---------------------------
@@ -129,11 +130,11 @@ class NetworkBlock(nn.Module):
 
 class WideResNet(nn.Module):
     def __init__(
-        self,
-        depth=28,
-        widen_factor=10,
-        num_classes=100,
-        drop_rate=0.0,
+            self,
+            depth=28,
+            widen_factor=10,
+            num_classes=100,
+            drop_rate=0.0,
     ):
         super().__init__()
         assert (depth - 4) % 6 == 0
@@ -193,10 +194,10 @@ class WideResNet(nn.Module):
 
 
 def create_model(
-    name: str,
-    num_classes: int = 100,
-    pretrained: bool = False,
-    drop_rate: float = 0.0
+        name: str,
+        num_classes: int = 100,
+        pretrained: bool = False,
+        drop_rate: float = 0.0
 ) -> Tuple[nn.Module, int]:
     """
     Returns (model, img_size).
@@ -294,12 +295,12 @@ def get_transforms(img_size: int):
 
 
 def get_dataloaders(
-    data_root: str,
-    img_size: int,
-    batch_size: int,
-    val_split: float,
-    num_workers: int,
-    seed: int = 42,
+        data_root: str,
+        img_size: int,
+        batch_size: int,
+        val_split: float,
+        num_workers: int,
+        seed: int = 42,
 ):
     train_tf, test_tf = get_transforms(img_size)
 
@@ -345,17 +346,38 @@ def get_dataloaders(
 
 
 # ---------------------------
+# Implement mixup
+# ---------------------------
+def mixup_data(x, y, alpha=0.2, device="cuda"):
+    if alpha <= 0:
+        return x, y, None, None
+
+    lam = np.random.beta(alpha, alpha)
+    batch_size = x.size(0)
+    index = torch.randperm(batch_size).to(device)
+
+    mixed_x = lam * x + (1 - lam) * x[index, :]
+    y_a, y_b = y, y[index]
+    return mixed_x, y_a, y_b, lam
+
+
+#Loss helper
+def mixup_criterion(criterion, pred, y_a, y_b, lam):
+    return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+
+
+# ---------------------------
 # Train / Eval loops
 # ---------------------------
 
 
 def train_one_epoch(
-    model: nn.Module,
-    loader: DataLoader,
-    device: torch.device,
-    criterion: nn.Module,
-    optimizer: torch.optim.Optimizer,
-    scaler: torch.cuda.amp.GradScaler,
+        model: nn.Module,
+        loader: DataLoader,
+        device: torch.device,
+        criterion: nn.Module,
+        optimizer: torch.optim.Optimizer,
+        scaler: torch.cuda.amp.GradScaler,
 ):
     model.train()
     running_loss = 0.0
@@ -369,9 +391,23 @@ def train_one_epoch(
 
         optimizer.zero_grad(set_to_none=True)
         # Mixed precision is only enabled on CUDA; on MPS/CPU this is automatically off
+        # with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+        #     logits = model(images)
+        #     loss = criterion(logits, targets)
+
+        #Implement mixup
+        # apply mixup
+        if hasattr(args, "mixup_alpha") and args.mixup_alpha > 0:
+            images, targets_a, targets_b, lam = mixup_data(images, targets, alpha=args.mixup_alpha, device=device)
+        else:
+            targets_a, targets_b, lam = targets, None, None
+
         with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
             logits = model(images)
-            loss = criterion(logits, targets)
+            if lam is not None:
+                loss = mixup_criterion(criterion, logits, targets_a, targets_b, lam)
+            else:
+                loss = criterion(logits, targets)
 
         scaler.scale(loss).backward()
         scaler.step(optimizer)
@@ -392,10 +428,10 @@ def train_one_epoch(
 
 
 def evaluate(
-    model: nn.Module,
-    loader: DataLoader,
-    device: torch.device,
-    criterion: nn.Module,
+        model: nn.Module,
+        loader: DataLoader,
+        device: torch.device,
+        criterion: nn.Module,
 ):
     model.eval()
     running_loss = 0.0
@@ -533,15 +569,25 @@ def run_experiment_for_model(model_name: str, base_args):
         )
 
     # Cosine schedule with linear warmup
+    # Cosine LR schedule with linear warmup (epoch-based)
     warmup_epochs = max(1, int(0.03 * args.epochs))
-    total_steps = args.epochs * len(dl_train)
-    warmup_steps = warmup_epochs * len(dl_train)
 
-    def cosine_lr_lambda(step):
-        if step < warmup_steps:
-            return float(step) / float(max(1, warmup_steps))
-        progress = float(step - warmup_steps) / float(
-            max(1, total_steps - warmup_steps)
+    def cosine_lr_lambda(epoch: int) -> float:
+        """
+        epoch: 0, 1, ..., args.epochs-1
+        Returns a multiplier for the base LR.
+        """
+        # epoch counting in the function is 0-based.
+        # We'll treat epoch+1 as the current "1-based" progress.
+        current_epoch = epoch + 1
+
+        if current_epoch <= warmup_epochs:
+            # Linear warmup from 1/warmup_epochs to 1.0
+            return current_epoch / float(max(1, warmup_epochs))
+
+        # Cosine decay from warmup_epochs -> args.epochs
+        progress = float(current_epoch - warmup_epochs) / float(
+            max(1, args.epochs - warmup_epochs)
         )
         return 0.5 * (1.0 + math.cos(math.pi * progress))
 
@@ -552,8 +598,8 @@ def run_experiment_for_model(model_name: str, base_args):
     # Output directories & logging
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     run_name = (
-        args.run_name
-        or f"{model_name}_e{args.epochs}_bs{args.batch_size}_{timestamp}"
+            args.run_name
+            or f"{model_name}_e{args.epochs}_bs{args.batch_size}_{timestamp}"
     )
     out_dir, ckpt_dir, plots_dir, results_dir = prepare_output_dirs(run_name)
 
@@ -606,7 +652,7 @@ def run_experiment_for_model(model_name: str, base_args):
     }
     best_val = -1.0
     best_path = os.path.join(ckpt_dir, f"{model_name}_best.pt")
-    global_step = 0
+    #global_step = 0
 
     try:
         for epoch in range(args.epochs):
@@ -629,7 +675,7 @@ def run_experiment_for_model(model_name: str, base_args):
             history["val_acc"].append(val_top1)
 
             scheduler.step()
-            global_step += len(dl_train)
+            #global_step += len(dl_train)
 
             is_best = val_top1 > best_val
             if is_best:
@@ -645,7 +691,7 @@ def run_experiment_for_model(model_name: str, base_args):
 
             dt = time.time() - t0
             logger.info(
-                f"Epoch {epoch+1:03d}/{args.epochs:03d} "
+                f"Epoch {epoch + 1:03d}/{args.epochs:03d} "
                 f"- {dt:6.1f}s - "
                 f"train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, "
                 f"train_top1={train_top1:.4f}, val_top1={val_top1:.4f}"
@@ -756,7 +802,7 @@ def main():
         nargs="+",
         choices=VALID_MODELS,
         help="One or more models to train sequentially. "
-        "You will be asked to confirm each one.",
+             "You will be asked to confirm each one.",
     )
 
     parser.add_argument(
