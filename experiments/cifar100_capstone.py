@@ -189,6 +189,34 @@ class WideResNet(nn.Module):
 
 
 # ---------------------------
+# Classifier-head Dropout helper
+# ---------------------------
+
+def _wrap_classifier_with_dropout(
+    module: nn.Module,
+    p: float,
+    num_classes: int,
+) -> None:
+    """
+    Recursively wraps any nn.Linear with out_features == num_classes
+    in a Dropout(p) -> Linear(...) block, in-place.
+
+    For example, a final classifier `fc: Linear(in_features, num_classes)`
+    becomes `Sequential(Dropout(p), fc)`.
+    """
+    if p <= 0.0:
+        return
+
+    for name, child in list(module.named_children()):
+        # Recurse first to go deeper in the module tree
+        _wrap_classifier_with_dropout(child, p, num_classes)
+
+        # Replace classifier head if it matches `num_classes`
+        if isinstance(child, nn.Linear) and child.out_features == num_classes:
+            setattr(module, name, nn.Sequential(nn.Dropout(p), child))
+
+
+# ---------------------------
 # Model factory
 # ---------------------------
 
@@ -249,6 +277,9 @@ def create_model(
 
     else:
         raise ValueError(f"Unknown model: {name}")
+
+    if drop_rate > 0.0 and name != "wrn28x10":
+        _wrap_classifier_with_dropout(model, drop_rate, num_classes)
 
     return model, img_size
 
@@ -841,7 +872,7 @@ def main():
         "--drop-rate",
         type=float,
         default=0.0,
-        help="Dropout rate for WideResNet blocks",
+        help="Dropout rate",
     )
     parser.add_argument("--label-smoothing", type=float, default=0.1)
     parser.add_argument("--val-split", type=float, default=0.1)

@@ -13,3 +13,4 @@ outputs/
 venv/
 env/
 __pycache__/
+/anup-files/
